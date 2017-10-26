@@ -30,7 +30,11 @@ load("~/Biostuff/SEMFR_HEIGHT-GESTAGE/working_dataset_TWISIN_20170613_n1159478.R
 # .. fetal twins with very discordant weight are both excluded
 
 
-dat = read.table("~/Downloads/Nat2014PublicUS.c20150514.r20151022/Nat2014PublicUS.c20150514.r20151022.20k.tab",h=T,stringsAsFactors = F,sep="\t")
+# load the data
+#dat = read.table("~/Biostuff/USA_BIRTH_REGISTER/Nat2014PublicUS.c20150514.r20151022.tab",h=T,stringsAsFactors = F,sep="\t")
+#save(list=c("dat"),file = "~/Biostuff/USA_BIRTH_REGISTER/loaded_data.RData")
+load("~/Biostuff/USA_BIRTH_REGISTER/loaded_data.RData")
+
 
 # MRACE6 (1=white)
 # MRACE15  (01=white)
@@ -44,19 +48,16 @@ dat = read.table("~/Downloads/Nat2014PublicUS.c20150514.r20151022/Nat2014PublicU
 # OEGest_Comb  (gest age in weeks)
 # DBWT  (birthweight in gramms)
 
-
-table(dat$MRACE6,useNA = "a")
-table(dat$MRACE15,useNA = "a")
-table(dat$FRACE31,useNA = "a")
-table(dat$FBRACE,useNA = "a")
-table(dat$MRACE6,dat$MRACE15,useNA = "a")
-table(dat$MRACE15,useNA = "a")
-
+####  Leaev only White Americans
+#table(dat$MRACE6,dat$MRACE15,useNA = "a")
+#table(dat$FRACE31,dat$FBRACE,useNA = "a")
 dat = dat[which((dat$MRACE6==1)&(dat$MRACE15==1)),]
 dat = dat[which((dat$FRACE31==1)&(dat$FBRACE==1)),]
 
-table(dat$PRIORTERM,useNA = "a")
-table(dat$PRIORLIVE,dat$PRIORDEAD,useNA = "a")
+
+#### LEAVE ONLY PARITY 0
+#table(dat$PRIORTERM,useNA = "a")
+#table(dat$PRIORLIVE,dat$PRIORDEAD,useNA = "a")
 dat = dat[which((dat$PRIORLIVE==0)&(dat$PRIORDEAD==0)&(dat$PRIORTERM==0)),]
 dim(dat)
 
@@ -64,15 +65,20 @@ dim(dat)
 table(dat$DPLURAL,useNA="a")
 dat = dat[which(dat$DPLURAL %in% c(1,2)),]
 
+### Leave only one child per pregnancy
+#table(dat$SETORDER_R,dat$DPLURAL,useNA="a")
+bad_rows = which( (dat$DPLURAL==2)&(dat$SETORDER_R==2))
+dat = dat[-bad_rows,]; rm(bad_rows)
+
 # Mother's age
 table(dat$MAGER,useNA = "a")
 dat = dat[which((dat$MAGER>=18)&(dat$MAGER<=45)),]
 dim(dat)
 
-# Gest Age and Birthweight
-hist(dat$OEGest_Comb,breaks=100,col="Grey")
-hist(dat$DBWT,breaks=100,col="Grey")
-plot(dat$OEGest_Comb,dat$DBWT)
+## Gest Age and Birthweight
+#hist(dat$OEGest_Comb,breaks=100,col="Grey")
+#hist(dat$DBWT,breaks=100,col="Grey")
+#plot(dat$OEGest_Comb,dat$DBWT)
 dat$GRDBS = dat$OEGest_Comb * 7
 
 
@@ -82,28 +88,48 @@ dat$MLANGD = dat$M_Ht_In * 2.54
 hist(dat$MLANGD)
 
 
-dat = dat[,c("GRDBS","DBWT","DPLURAL","MLANGD")]
 dat$status = "singl"
 dat$status[which(dat$DPLURAL==2)] = "twins"
 head(dat)
+
+### no missing data
+dat = dat[which(!is.na(dat$MLANGD)),]
+dat = dat[which(!is.na(dat$GRDBS)),]
+
+# data cleaning
+hist(dat$MLANGD)
+dat = dat[which(dat$MLANGD>=140),]
+
+save(list=c("dat"),file = "~/Biostuff/USA_BIRTH_REGISTER/loaded_data_digested.RData")
+load("~/Biostuff/USA_BIRTH_REGISTER/loaded_data_digested.RData")
+
+
+###########
+#dat = dat[,c("GRDBS","DBWT","DPLURAL","MLANGD")]
+
+
+
 
 #########
 #########  PLOT 1:  TWINS vs SINGLETONS
 #########
 
 ######  polynomial linear regression model
-#mod = lm(GRDBS ~ poly(MLANGD,2) * status, data = dat)
+mod = lm(GRDBS ~ poly(MLANGD,2) * status, data = dat)
 mod = lm(GRDBS ~ MLANGD * status, data = dat)
 summary(mod)
 
+
 fun= function() {
-        df = expand.grid(status=c("twins","singl"),MLANGD=140:196)
+        df = expand.grid(status=c("twins","singl"),MLANGD=140:200)
         df = df[order(df$status,df$MLANGD),]
         prd = predict(mod,df,interval = "confidence",level = 0.95) # predicted values and confidence intervals
         df$nw = prd[,1] # nw = new values
         
         tst = df$status=="singl"
-        plot(df$MLANGD[tst],df$nw[tst],col="cornflowerblue",type="l",ylim=c(min(df$nw)*0.98,max(df$nw)*1.02),
+        plot(df$MLANGD[tst],df$nw[tst],col="cornflowerblue",type="l",
+             xlim=range(dat$MLANGD),
+             ylim=c(min(df$nw)*0.98,max(df$nw)*1.02),
              ylab="child's gestational age at birth (days)",xlab="maternal height (cm)")
         points(df$MLANGD[!tst],df$nw[!tst],col="orange",type="l")
         grid()
@@ -145,7 +171,7 @@ fun= function() {
         
         # LEGEND 1
         x = 155; dx = 5.0; xs = c(x,x+dx,x+dx,x,x)
-        y = 230; dy = 2; ys = c(y-dy,y-dy,y+dy,y+dy,y-dy)
+        y = 238; dy = 2; ys = c(y-dy,y-dy,y+dy,y+dy,y-dy)
         polygon(xs,ys,col=ciclr_sin,border = NA)
         segments(x,y,x+dx,y,col="cornflowerblue") # SGA
         polygon(xs,ys-5,col=ciclr_twi,border = NA)
@@ -155,7 +181,7 @@ fun= function() {
         text(x+4,y-5,"twins",pos = 4,cex = 0.7)
         
         # LEGEND 2
-        x = 170; y = 230; dy = 0.5
+        x = 170; y = 239; dy = 0.5
         text(x-2,y+4,"mean, 95% CI",pos = 4,cex = 0.7)
         points(c(x,x-0.2),c(y,y-5),pch=19,cex=1.2,col=c("cornflowerblue","orange"))
         segments(x,y-2,x,y+2,col="darkgrey") # SINGLETONS
@@ -164,7 +190,7 @@ fun= function() {
         text(x,y-5,"twins",pos = 4,cex = 0.7)
         
         # LEGEND 3
-        x = 183; y = 235
+        x = 183; y = 239
         text(x-2,y,"observations (n)",pos = 4,cex = 0.7)
         szs = c(1e2,1e3,1e4)
         legend(x,y,legend = szs,pch=1,bty = "n",pt.cex = log(szs,50))
