@@ -1,0 +1,238 @@
+---
+title: "Simulations for MatHeight-GestAge paper"
+author: "Jonas B."
+output:
+  pdf_document: default
+  html_notebook: default
+  html_document: default
+---
+
+`r format(Sys.time(), "%d %B, %Y")`
+
+# Simulation of interaction effect between fetal growth rate, uterine size, and gestational age at birth
+
+The fast and slow fetal growth rate could be approximated by real data:
+
+* twin vs singleton pregnancies
+* two extremes of age-adjusted birthweight Z-scores (estimated from longitudinal growth curves in term pregnancies).
+
+Uterine size could approximated by real data:
+
+* maternal height during pregnancy
+
+
+In the following simulations we will use logistic activation functions to define the baseline probability of birth and the probability of birth due to fetal growth rate and maternal height interaction:
+
+
+```{r}
+# load the helper functions
+source("~/Dropbox/GIT/SEMFR_HEIGHT-GESTAGE/2017/simulation_functions.R")
+```
+
+#### How activation functions work
+
+```{r,fig.height = 4, fig.width = 7, echo=F,fig.align="center"}
+library(knitr)
+par(mfrow=c(1,2))
+# generator of Probability of Birth due to baseline
+ga = 200:330 # gestational ages
+th = 298 # threshold at which birth probability is 50%
+pb = 1 / (1 + exp(1)^(-log(ga/th,1.025) )) # Probability of Birth
+
+plot(pb~ga,ylim=c(0,1), type="l",main="Baseline",
+     xlab="gestational day",ylab="probability of birth")
+abline(v=th); grid()
+# add density of resulting gestAge
+#gas = fun_generateGestAge(0,rep(0,1e4),F,T)
+#dns = density(gas); dns$y = dns$y/max(dns$y)*0.5
+#points(dns,type="l",col="grey")
+
+# generator of Probability of Birth due to interaction
+fs = 2500:4000 # Fetal Sizes values (g)
+us = 3300 # threshold for Uterine Size (in fetal size equivalents, g)
+pb = 1/(1 + exp(1)^(-log(fs/us,1.01) )) # Probability of Birth
+plot(pb~fs,ylim=c(0,1), type="l",main="Interaction",
+     xlab="fetal size",ylab="probability of birth")
+abline(v=us); grid()
+```
+
+\newpage
+
+#### The distributions of generated variables
+
+```{r,echo=F,fig.height = 3, fig.width = 7,fig.align="center"}
+source("~/Dropbox/GIT/SEMFR_HEIGHT-GESTAGE/2017/simulation_functions.R")
+fun_generateCorData(n_ind=1e5,mean_fgr=10,seed=sample(1e5,1),scen=5)
+par(mfrow=c(1,3))
+hist(mhs,breaks=30,col="grey",main="maternal height")
+hist(mus,breaks=30,col="grey",main="maternal uterine size")
+hist(fgr,breaks=30,col="grey",main="fetal growth rate")
+```
+
+#### Possible causes of birth events
+
+```{r,echo=F,warning=F,message=FALSE,fig.height = 4, fig.width = 7,fig.align="center"}
+library(GGally)
+library(ggplot2)
+scenario = 1
+fun_generateCorData(n_ind=1000,mean_fgr=10,seed=sample(1e5,1),scen=scenario)
+gas0 = fun_generateGestAge(fgr,mus,interactionRisk = F,baselineRisk = T)
+plot_data  = data.frame(time=gas0,cause="baseline",mean=0,stringsAsFactors = F) # 0 means nothing here
+for(mn in c(8, 10.5, 13)){
+        fun_generateCorData(n_ind=1000,mean_fgr=mn,seed=sample(1e5,1),scen=scenario)
+        gas1 = fun_generateGestAge(fgr,mus,interactionRisk = T,baselineRisk = F)
+        tmp  = data.frame(time=gas1,cause=paste("MHxFGR-",mn,sep=""),mean=mn,stringsAsFactors = F)
+        plot_data = rbind(plot_data,tmp)
+}
+plot_data = plot_data[order(plot_data$mean),]
+plot_data$cause = factor(plot_data$cause,levels = unique(plot_data$cause))
+obj = ggplot(plot_data, aes(x=time, fill=cause)) + geom_histogram(alpha=0.5, bins=50, position="identity")
+print(obj)
+```
+
+The figure shows the expected distribution of gestational-age-at-birth values under various causal scenarios. "Baseline" represents a scenario in which birth events are caused by unknown environmental and genetic risk factors (it is designed to mimmic an empirical distribution of birth timing). The other scenarios represent a hypothetical birth-inducing factor - an interaction between fetal growth rate and maternal utarine size (~height), under various values of fetal growth rate. Fetal growth rate is assumed to be constant in time (somewhat unrealistic).
+
+#### The correlation between generated variables
+
+```{r,echo=F,warning=F,message=FALSE,fig.height = 5, fig.width = 5,fig.align="center"}
+library(GGally)
+library(ggplot2)
+source("~/Dropbox/GIT/SEMFR_HEIGHT-GESTAGE/2017/simulation_functions.R")
+fun_generateCorData(n_ind=1e4,mean_fgr=10,seed=sample(1e5,1),scen=5)
+tmp = data.frame(mhs,mus,fgr,stringsAsFactors = F)
+ggpairs(tmp)
+```
+
+\newpage
+
+## Simulation of interaction pattern under various assumptions
+
+### Very fast fetal growth
+
+In this setting we will choose the fetal growth rate to be really fast (**13**cm3/d), and thus the interaction between uterine size and fetal growth rate to almost exclusively determine the timing of birth.
+
+```{r,fig.align="center",fig.height = 5, fig.width = 5,echo=F}
+par(mfrow=c(3,3),mar=c(2,2,2,2)) # par(mar=c(5,4,4,2))
+coefs = NULL
+for (i in c(8,1,2,7,9,3,6,5,4)) {
+if (i==9) {
+        fun_plotScen()
+} else {
+fun_generateCorData(n_ind=1000,mean_fgr=13,seed=sample(1e5,1),scen=i)
+gas = fun_generateGestAge(fgr,mus,T,T)
+mod = lm(gas ~ mhs*sta)
+fun_interactionPlots(mod,mhs,sta,gas,i)
+cfs = coef(summary(mod))
+cfs = data.frame(scenario=i,
+                 beta1=round(cfs[2,1],2),beta2=round(cfs[3,1],2),beta3=round(cfs[4,1],2),
+                 pval1=cfs[2,4],pval2=cfs[3,4],pval3=cfs[4,4], stringsAsFactors = F)
+coefs = rbind(coefs,cfs); rm(cfs)
+}
+}
+coefs = coefs[order(coefs$scen),]
+t1 =  coefs[,5:7]<=0.000001
+t2 = (coefs[,5:7]> 0.000001)&(coefs[,5:7]<=0.00001)
+t3 = (coefs[,5:7]> 0.00001) &(coefs[,5:7]<=0.0001)
+t4 = (coefs[,5:7]> 0.0001)  &(coefs[,5:7]<=0.001)
+t5 = (coefs[,5:7]> 0.001)   &(coefs[,5:7]<=0.01)
+t6 = (coefs[,5:7]> 0.01)    &(coefs[,5:7]<=0.05)
+t7 =  coefs[,5:7]> 0.05
+coefs[,5:7][t1] = "*****"
+coefs[,5:7][t2] = "****"
+coefs[,5:7][t3] = "***"
+coefs[,5:7][t4] = "**"
+coefs[,5:7][t5] = "*"
+coefs[,5:7][t6] = "."
+coefs[,5:7][t7] = ""
+library(knitr)
+kable(coefs,format = "markdown",row.names = F,align = "c")
+```
+
+The relationship between gestational age at birth (y-axis) and maternal height (y-axis) is shown for two strata of fetuses: LGA (large for gestational age) in orange and SGA (small for gestational age) in blue. Dependencies are modelled with linear regression lines with 95% conf. intervals. In the center, the eight simulations are explained: blue thick lines indicate an imposed correlation between variables (FGR, fetal growth rate; MH, maternal height; MUS, maternal uterine size).
+
+\newpage
+
+### Very slow fetal growth
+
+In this setting we will choose the fetal growth rate to be really slow (**8**cm3/d), and thus the unknown factors (baseline model) to almost exclusively determine the timing of birth.
+
+```{r,fig.align="center",fig.height = 6, fig.width = 6,echo=F}
+par(mfrow=c(3,3),mar=c(2,2,2,2)) # par(mar=c(5,4,4,2))
+coefs = NULL
+for (i in c(8,1,2,7,9,3,6,5,4)) {
+if (i==9) {
+        fun_plotScen()
+} else {
+fun_generateCorData(n_ind=1000,mean_fgr=8,seed=sample(1e5,1),scen=i)
+gas = fun_generateGestAge(fgr,mus,T,T)
+mod = lm(gas ~ mhs*sta)
+fun_interactionPlots(mod,mhs,sta,gas,i)
+cfs = coef(summary(mod))
+cfs = data.frame(scenario=i,
+                 beta1=round(cfs[2,1],2),beta2=round(cfs[3,1],2),beta3=round(cfs[4,1],2),
+                 pval1=cfs[2,4],pval2=cfs[3,4],pval3=cfs[4,4], stringsAsFactors = F)
+coefs = rbind(coefs,cfs); rm(cfs)
+
+}
+}
+coefs = coefs[order(coefs$scen),]
+t1 =  coefs[,5:7]<=0.000001
+t2 = (coefs[,5:7]> 0.000001)&(coefs[,5:7]<=0.00001)
+t3 = (coefs[,5:7]> 0.00001) &(coefs[,5:7]<=0.0001)
+t4 = (coefs[,5:7]> 0.0001)  &(coefs[,5:7]<=0.001)
+t5 = (coefs[,5:7]> 0.001)   &(coefs[,5:7]<=0.01)
+t6 = (coefs[,5:7]> 0.01)    &(coefs[,5:7]<=0.05)
+t7 =  coefs[,5:7]> 0.05
+coefs[,5:7][t1] = "*****"
+coefs[,5:7][t2] = "****"
+coefs[,5:7][t3] = "***"
+coefs[,5:7][t4] = "**"
+coefs[,5:7][t5] = "*"
+coefs[,5:7][t6] = "."
+coefs[,5:7][t7] = ""
+library(knitr)
+kable(coefs,format = "markdown",row.names = F,align = "c")
+```
+
+\newpage
+
+### "Balanced" fetal growth
+
+In this setting we will allow the baseline model to compete with interaction model by choosing moderate fetal growth rate (**10.5**cm3/d).
+
+```{r,fig.align="center",fig.height = 6, fig.width = 6,echo=F}
+par(mfrow=c(3,3),mar=c(2,2,2,2)) # par(mar=c(5,4,4,2))
+coefs = NULL
+for (i in c(8,1,2,7,9,3,6,5,4)) {
+if (i==9) {
+        fun_plotScen()
+} else {
+fun_generateCorData(n_ind=1000,mean_fgr=10.5,seed=sample(1e5,1),scen=i)
+gas = fun_generateGestAge(fgr,mus,T,T)
+mod = lm(gas ~ mhs*sta)
+fun_interactionPlots(mod,mhs,sta,gas,i)
+cfs = coef(summary(mod))
+cfs = data.frame(scenario=i,
+                 beta1=round(cfs[2,1],2),beta2=round(cfs[3,1],2),beta3=round(cfs[4,1],2),
+                 pval1=cfs[2,4],pval2=cfs[3,4],pval3=cfs[4,4], stringsAsFactors = F)
+coefs = rbind(coefs,cfs); rm(cfs)
+}
+}
+coefs = coefs[order(coefs$scen),]
+t1 =  coefs[,5:7]<=0.000001
+t2 = (coefs[,5:7]> 0.000001)&(coefs[,5:7]<=0.00001)
+t3 = (coefs[,5:7]> 0.00001) &(coefs[,5:7]<=0.0001)
+t4 = (coefs[,5:7]> 0.0001)  &(coefs[,5:7]<=0.001)
+t5 = (coefs[,5:7]> 0.001)   &(coefs[,5:7]<=0.01)
+t6 = (coefs[,5:7]> 0.01)    &(coefs[,5:7]<=0.05)
+t7 =  coefs[,5:7]> 0.05
+coefs[,5:7][t1] = "*****"
+coefs[,5:7][t2] = "****"
+coefs[,5:7][t3] = "***"
+coefs[,5:7][t4] = "**"
+coefs[,5:7][t5] = "*"
+coefs[,5:7][t6] = "."
+coefs[,5:7][t7] = ""
+library(knitr)
+kable(coefs,format = "markdown",row.names = F,align = "c")
+```
