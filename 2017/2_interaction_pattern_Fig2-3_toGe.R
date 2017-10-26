@@ -30,19 +30,71 @@ load("~/Biostuff/SEMFR_HEIGHT-GESTAGE/working_dataset_TWISIN_20170613_n1159478.R
 # .. fetal twins with very discordant weight are both excluded
 
 
+dat = read.table("~/Downloads/Nat2014PublicUS.c20150514.r20151022/Nat2014PublicUS.c20150514.r20151022.20k.tab",h=T,stringsAsFactors = F,sep="\t")
+
+# MRACE6 (1=white)
+# MRACE15  (01=white)
+# FRACE31 (01 = white) for father
+# FBRACE  (1=white) for father
+# PRIORLIVE
+# PRIORDEAD
+# PRIORTERM
+# DPLURAL (1=single, 2=twin)
+# MAGER (mother's age)
+# OEGest_Comb  (gest age in weeks)
+# DBWT  (birthweight in gramms)
 
 
-# filter data for all analyses
-dat = dat[which(dat$PARITET_F==1),]  # THIS MUST BE THE FIRST PREGNANCY OF THE MOTHER !!!!
-dat = dat[which(dat$MALDER %in% 18:45),]  # MOTHERS AGE
+table(dat$MRACE6,useNA = "a")
+table(dat$MRACE15,useNA = "a")
+table(dat$FRACE31,useNA = "a")
+table(dat$FBRACE,useNA = "a")
+table(dat$MRACE6,dat$MRACE15,useNA = "a")
+table(dat$MRACE15,useNA = "a")
+
+dat = dat[which((dat$MRACE6==1)&(dat$MRACE15==1)),]
+dat = dat[which((dat$FRACE31==1)&(dat$FBRACE==1)),]
+
+table(dat$PRIORTERM,useNA = "a")
+table(dat$PRIORLIVE,dat$PRIORDEAD,useNA = "a")
+dat = dat[which((dat$PRIORLIVE==0)&(dat$PRIORDEAD==0)&(dat$PRIORTERM==0)),]
+dim(dat)
+
+### singletons and twins
+table(dat$DPLURAL,useNA="a")
+dat = dat[which(dat$DPLURAL %in% c(1,2)),]
+
+# Mother's age
+table(dat$MAGER,useNA = "a")
+dat = dat[which((dat$MAGER>=18)&(dat$MAGER<=45)),]
+dim(dat)
+
+# Gest Age and Birthweight
+hist(dat$OEGest_Comb,breaks=100,col="Grey")
+hist(dat$DBWT,breaks=100,col="Grey")
+plot(dat$OEGest_Comb,dat$DBWT)
+dat$GRDBS = dat$OEGest_Comb * 7
+
+
+# maternal height
+hist(dat$M_Ht_In)
+dat$MLANGD = dat$M_Ht_In * 2.54
+hist(dat$MLANGD)
+
+
+dat = dat[,c("GRDBS","DBWT","DPLURAL","MLANGD")]
+dat$status = "singl"
+dat$status[which(dat$DPLURAL==2)] = "twins"
+head(dat)
 
 #########
 #########  PLOT 1:  TWINS vs SINGLETONS
 #########
 
 ######  polynomial linear regression model
-mod = lm(GRDBS ~ poly(MLANGD,2) * status, data = dat)
-
+#mod = lm(GRDBS ~ poly(MLANGD,2) * status, data = dat)
+mod = lm(GRDBS ~ MLANGD * status, data = dat)
+summary(mod)
 
 fun= function() {
         df = expand.grid(status=c("twins","singl"),MLANGD=140:196)

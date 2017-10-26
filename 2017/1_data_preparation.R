@@ -239,6 +239,13 @@ bvikt = spread(data=tmp,key=BORDNRF2,value=BVIKTBS)
 colnames(bvikt) = c("midar","BVIKTBS_12","BVIKTBS_22")
 head(bvikt); rm(tmp)
 
+####  convert to wide format the KON values
+tmp = dat[,c("midar","BORDNRF2","KON")]
+kon = spread(data=tmp,key=BORDNRF2,value=KON)
+kon$disex = apply(kon[,c(2,3)],1,function(x) paste(sort(x),collapse=""))
+kon = kon[,c(1,4)]
+head(kon); rm(tmp)
+
 ####  convert to wide format the PARITY values
 tmp = dat[,c("midar","BORDNRF2","PARITET_F")]   # note! not PARITET, but PARITET_F !
 parit = spread(data=tmp,key=BORDNRF2,value=PARITET_F)
@@ -267,7 +274,8 @@ barnid = spread(data=tmp,key=BORDNRF2,value=lpnr_BARN)
 colnames(barnid) = c("midar","lpnr_BARN_12","lpnr_BARN_22")
 head(barnid); rm(tmp)
 
-mrg3 = merge(parit,mlang,by="midar",all=T)
+mrg4 = merge(parit,kon,by="midar",all=T)
+mrg3 = merge(mrg4,mlang,by="midar",all=T)
 mrg2 = merge(mrg3,bvikt,by="midar",all=T)
 mrg1 = merge(mrg2,grdbs,by="midar",all=T)
 mrg = merge(mrg1,barnid,by="midar",all=T)
@@ -331,8 +339,7 @@ mean(mrg$excl)
 head(mrg)
 
 
-
-twins = mrg[,c("midar","GRDBS","PARITET_F","MLANGD","lpnr_BARN_12","lpnr_BARN_22",
+twins = mrg[,c("midar","GRDBS","disex","PARITET_F","MLANGD","lpnr_BARN_12","lpnr_BARN_22",
                "BVIKTBS_12","BVIKTBS_22","bwdif","BWdev1sd","excl")]
 
 #save(list = c("twins","mrg"),
@@ -397,11 +404,16 @@ load("~/Biostuff/SEMFR_HEIGHT-GESTAGE/deleteme_20170414_12th-stage.RData") # ful
 
 
 twins$KON=NA
+twins$KON[which(twins$disex=="11")] = "BB"
+twins$KON[which(twins$disex=="12")] = "BG"
+twins$KON[which(twins$disex=="22")] = "GG"
+
 sup = dat[,c("lpnr_BARN","lpnr_mor","MFODDAT","AR","MFODLAND","MNAT","MALDER")] # KON
 twins = merge(twins,sup,by.x="lpnr_BARN_12",by.y="lpnr_BARN",all.x=T)
 colnames(twins)[which(colnames(twins)=="lpnr_BARN_12")] = "lpnr_BARN"
 twins$BVIKTBS = round((twins$BVIKTBS_12 + twins$BVIKTBS_22) / 2,0)
 twins$status = "twins"
+head(twins)
 
 singl$excl = NA
 sup = dat[,c("lpnr_BARN","MFODDAT","MFODLAND","MNAT")]
@@ -421,6 +433,11 @@ dat = dat[sample(nrow(dat),nrow(dat),replace = F),]
 bad_rows = which((is.na(dat$BVIKTBS))&(dat$status=="singl"))
 dat = dat[-bad_rows,]; rm(bad_rows)
 nrow(dat)
+
+# recode remaining fetal gender values for singletons
+table(dat$KON)
+dat$KON[which(dat$KON==1)] = "B"
+dat$KON[which(dat$KON==2)] = "G"
 
 save(list = c("dat"),file="~/Biostuff/SEMFR_HEIGHT-GESTAGE/working_dataset_TWISIN_20170613_n1159478.RData")
 #load("~/Biostuff/SEMFR_HEIGHT-GESTAGE/working_dataset_TWISIN_20170613_n1159478.RData")
