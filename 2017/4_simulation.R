@@ -24,29 +24,30 @@ fun_run = function(base_shift,densit,scaPlot,graHistA,graHistB,graHistX) {
 # graHistA = to-plot-or-not final simulated gestational age due to competing baseline and interaction risks (logical TRUE/FALSE) 
 # graHistB = to-plot-or-not counterfactual gestational age due to baseline risks (logical TRUE/FALSE) 
 # graHistX = to-plot-or-not counterfactual gestational age due to interaction (logical TRUE/FALSE) 
-                
-## generate variables
-gas = rgompertz(n_ind*1.1,0.1212,1.026*1e-8) + 150 # approximation of natural gest.age-at-birth distribution
-# truncate the tail (for not wasting precious gradient colors on invisible bars in histogram)
-gas = gas[which(gas>220)]
-gas = sample(gas,n_ind,replace = F)
 
+## generate variables
+        
+# child's gestational age (GA) at birth        
+gas = rgompertz(n_ind*1.1,0.1212,1.026*1e-8) + 150 # approximation of natural GA distribution
+gas = gas[which(gas>220)] # truncate the tail
+gas = sample(gas,n_ind,replace = F) # shuffle randomly
+# other
 fgr = rnorm(n_ind,mean=10,sd=1) # fetal growth rate (arbitrary units)
 mus = rnorm(n_ind,mean=10,sd=1) # maternal uterine size (arbitrary units)
 rat =  fgr/mus  # ratio, determining interaction-imposed birth time
 
-# create dependency between maternal height and uterine size
+## create dependency between maternal height and uterine size
 mhs_src = rnorm(n_ind,mean=165,sd=10) # maternal height (source)
 hlp = mus + rnorm(n_ind) # helper
 rnk = match(rank(mhs_src),rank(hlp))
 mhs = mhs_src[order(rnk)]; rm(rnk,hlp,mhs_src)
 
-# interaction("rat")-imposed getational age data (gas_X)
+## interaction("rat")-imposed getational age data (gas_X)
 tmp = (length(gas)+1) - rank(gas)
 rnk = match(tmp,rank(rat))
-gas_X = gas[order(rnk)]; rm(rnk)
+gas_X = gas[order(rnk)]; rm(rnk) # dependency on FGR and MUS ratio
 
-# baseline-imposed getational age data (gas_B)
+## baseline-imposed getational age data (gas_B)
 gas_B = sample(gas)  + base_shift 
 
 # create a dataframe 
